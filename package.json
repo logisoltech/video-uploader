@@ -1,0 +1,24 @@
+{
+  "name": "custom-video-uploader-r2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.928.0",
+    "@aws-sdk/s3-request-presigner": "^3.928.0",
+    "env": "^0.0.2",
+    "nanoid": "^5.1.6",
+    "next": "16.0.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "resend": "^6.4.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4"
+  }
+}
