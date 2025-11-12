@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 const initialForm = {
   phoneNumber: "",
@@ -85,16 +85,22 @@ async function uploadFileToR2(file, onProgress) {
 
 export default function Home() {
   const [form, setForm] = useState(initialForm);
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [videoFiles, setVideoFiles] = useState([]);
-  const [imageProgress, setImageProgress] = useState(0);
+  const [imageProgress, setImageProgress] = useState({});
   const [videoProgress, setVideoProgress] = useState({});
   const [imageInputKey, setImageInputKey] = useState(0);
   const [videoInputKey, setVideoInputKey] = useState(0);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+
+  const hasImageSelection = imageFiles.length > 0;
   const hasVideoSelection = videoFiles.length > 0;
+
+  const makeFileKey = (file) => `${file.name}-${file.size}-${file.lastModified ?? ""}`;
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({
@@ -104,22 +110,82 @@ export default function Home() {
   };
 
   const handleImageChange = (event) => {
-    const file = event.target.files?.[0];
-    setImageFile(file || null);
-    setImageProgress(0);
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    if (!files.length) {
+      return;
+    }
+
+    setImageFiles((prev) => {
+      const merged = new Map(prev.map((file) => [makeFileKey(file), file]));
+      files.forEach((file) => {
+        merged.set(makeFileKey(file), file);
+      });
+      return Array.from(merged.values());
+    });
+
+    setImageProgress((prev) => {
+      const next = { ...prev };
+      files.forEach((file) => {
+        const key = makeFileKey(file);
+        if (!(key in next)) next[key] = 0;
+      });
+      return next;
+    });
+
+    if (event.target) {
+      event.target.value = "";
+    }
+  };
+
+  const handleRemoveImage = (fileKey) => {
+    setImageFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
+    setImageProgress((prev) => {
+      const { [fileKey]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleVideoChange = (event) => {
     const files = event.target.files ? Array.from(event.target.files) : [];
-    setVideoFiles(files);
-    setVideoProgress({});
+    if (!files.length) {
+      return;
+    }
+
+    setVideoFiles((prev) => {
+      const merged = new Map(prev.map((file) => [makeFileKey(file), file]));
+      files.forEach((file) => {
+        merged.set(makeFileKey(file), file);
+      });
+      return Array.from(merged.values());
+    });
+
+    setVideoProgress((prev) => {
+      const next = { ...prev };
+      files.forEach((file) => {
+        const key = makeFileKey(file);
+        if (!(key in next)) next[key] = 0;
+      });
+      return next;
+    });
+
+    if (event.target) {
+      event.target.value = "";
+    }
+  };
+
+  const handleRemoveVideo = (fileKey) => {
+    setVideoFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
+    setVideoProgress((prev) => {
+      const { [fileKey]: _removed, ...rest } = prev;
+      return rest;
+    });
   };
 
   const resetForm = () => {
     setForm(initialForm);
-    setImageFile(null);
+    setImageFiles([]);
     setVideoFiles([]);
-    setImageProgress(0);
+    setImageProgress({});
     setVideoProgress({});
     setImageInputKey((prev) => prev + 1);
     setVideoInputKey((prev) => prev + 1);
@@ -136,8 +202,8 @@ export default function Home() {
       return false;
     }
 
-    if (!imageFile) {
-      setStatus({ type: "error", message: "Please upload an image." });
+    if (!imageFiles.length) {
+      setStatus({ type: "error", message: "Please upload at least one image." });
       return false;
     }
 
@@ -161,21 +227,34 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      const imageUpload = await uploadFileToR2(imageFile, setImageProgress);
+      const imageUploads = [];
+      for (let index = 0; index < imageFiles.length; index += 1) {
+        const file = imageFiles[index];
+        const fileKey = makeFileKey(file);
+
+        const result = await uploadFileToR2(file, (progress) => {
+          setImageProgress((prev) => ({
+            ...prev,
+            [fileKey]: progress,
+          }));
+        });
+
+        imageUploads.push({ ...result, name: file.name, label: fileKey });
+      }
 
       const videoUploads = [];
       for (let index = 0; index < videoFiles.length; index += 1) {
         const file = videoFiles[index];
-        const key = `${file.name}-${index}`;
+        const fileKey = makeFileKey(file);
 
         const result = await uploadFileToR2(file, (progress) => {
           setVideoProgress((prev) => ({
             ...prev,
-            [key]: progress,
+            [fileKey]: progress,
           }));
         });
 
-        videoUploads.push({ ...result, name: file.name, label: key });
+        videoUploads.push({ ...result, name: file.name, label: fileKey });
       }
 
       const response = await fetch("/api/submit", {
@@ -198,12 +277,11 @@ export default function Home() {
             honors: form.honors,
             videoCutInstructions: form.videoCutInstructions,
             videoLinks: form.videoLinks,
-            imageUrl: imageUpload.fileUrl,
-            imageKey: imageUpload.key,
+            uploadedImageKeys: imageUploads.map((image) => image.key),
             uploadedVideoKeys: videoUploads.map((video) => video.key),
           },
           videoUrls: videoUploads.map((video) => video.fileUrl),
-          imageUrl: imageUpload.fileUrl,
+          imageUrls: imageUploads.map((image) => image.fileUrl),
         }),
       });
 
@@ -224,12 +302,22 @@ export default function Home() {
     }
   };
 
+  const imageFileList = useMemo(
+    () =>
+      imageFiles.map((file) => ({
+        name: file.name,
+        size: file.size,
+        key: makeFileKey(file),
+      })),
+    [imageFiles]
+  );
+
   const videoFileList = useMemo(
     () =>
       videoFiles.map((file, index) => ({
         name: file.name,
         size: file.size,
-        key: `${file.name}-${index}`,
+        key: makeFileKey(file),
       })),
     [videoFiles]
   );
@@ -423,27 +511,53 @@ export default function Home() {
 
             <label className="flex flex-col text-base font-semibold text-slate-600">
               <span className="inline-flex items-center gap-1">
-                Upload Image
+                Upload Images
                 <span className="text-[#d93025]">*</span>
               </span>
               <input
                 key={imageInputKey}
                 type="file"
+                multiple
                 accept="image/*"
                 onChange={handleImageChange}
-                required
+                ref={imageInputRef}
                 className="mt-3 block w-full cursor-pointer rounded border border-slate-300 bg-slate-50 px-4 py-3 text-base font-normal text-slate-700 file:mr-4 file:rounded file:border-0 file:bg-[#007dc5] file:px-5 file:py-2.5 file:font-semibold file:text-white hover:file:bg-[#006bad] focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
               />
-              {imageFile && (
-                <>
-                  <p className="mt-2 text-sm text-slate-500">{imageFile.name}</p>
-                  <div className="mt-2 h-2 rounded bg-slate-200">
-                    <div
-                      className="h-full rounded bg-[#007dc5] transition-all"
-                      style={{ width: `${Math.min(imageProgress, 100)}%` }}
-                    />
-                  </div>
-                </>
+              {hasImageSelection && (
+                <ul className="mt-2 space-y-2 text-sm text-slate-500">
+                  {imageFileList.map((file) => (
+                    <li key={file.key}>
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div className="flex flex-1 items-center justify-between gap-4">
+                          <span className="truncate">{file.name}</span>
+                          <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(file.key)}
+                          className="inline-flex w-max items-center justify-center rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-500 transition hover:border-[#d93025] hover:text-[#d93025]"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="mt-2 h-2 rounded bg-slate-200">
+                        <div
+                          className="h-full rounded bg-[#007dc5] transition-all"
+                          style={{ width: `${Math.min(imageProgress[file.key] || 0, 100)}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {hasImageSelection && (
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="mt-3 inline-flex w-max items-center justify-center rounded border border-dashed border-[#007dc5] px-4 py-2 text-sm font-medium text-[#007dc5] transition hover:bg-[#f0f4ff]"
+                >
+                  Add more images
+                </button>
               )}
             </label>
 
@@ -458,16 +572,25 @@ export default function Home() {
                 multiple
                 accept="video/*"
                 onChange={handleVideoChange}
-                required
+                ref={videoInputRef}
                 className="mt-3 block w-full cursor-pointer rounded border border-slate-300 bg-slate-50 px-4 py-3 text-base font-normal text-slate-700 file:mr-4 file:rounded file:border-0 file:bg-[#007dc5] file:px-5 file:py-2.5 file:font-semibold file:text-white hover:file:bg-[#006bad] focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
               />
               {hasVideoSelection && (
                 <ul className="mt-2 space-y-2 text-sm text-slate-500">
                   {videoFileList.map((file) => (
                     <li key={file.key}>
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="truncate">{file.name}</span>
-                        <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div className="flex flex-1 items-center justify-between gap-4">
+                          <span className="truncate">{file.name}</span>
+                          <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVideo(file.key)}
+                          className="inline-flex w-max items-center justify-center rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-500 transition hover:border-[#d93025] hover:text-[#d93025]"
+                        >
+                          Remove
+                        </button>
                       </div>
                       <div className="mt-2 h-2 rounded bg-slate-200">
                         <div
@@ -478,6 +601,15 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
+              )}
+              {hasVideoSelection && (
+                <button
+                  type="button"
+                  onClick={() => videoInputRef.current?.click()}
+                  className="mt-3 inline-flex w-max items-center justify-center rounded border border-dashed border-[#007dc5] px-4 py-2 text-sm font-medium text-[#007dc5] transition hover:bg-[#f0f4ff]"
+                >
+                  Add more videos
+                </button>
               )}
             </label>
 
