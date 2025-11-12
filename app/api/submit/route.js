@@ -34,7 +34,7 @@ export async function POST(req) {
     );
   }
 
-  const { form = {}, videoUrls = [], imageUrl } = payload || {};
+  const { form = {}, videoUrls = [], imageUrls = [] } = payload || {};
 
   const formatLabel = (key) =>
     key
@@ -72,14 +72,31 @@ export async function POST(req) {
       ? videoUrls
           .map(
             (url, index) => `
-              <li style="margin-bottom: 6px;">
-                <a href="${url}" style="color: #0c68ff; text-decoration: none;">Video ${index + 1}</a>
-                <div style="font-size: 12px; color: #64748b; word-break: break-all;">${url}</div>
+              <li style="margin-bottom: 12px; list-style: none;">
+                <div style="font-weight: 600; color:#1e293b; margin-bottom: 4px;">Video ${index + 1}</div>
+                <a href="${url}" style="display:inline-block; color: #0c68ff; text-decoration: none;">${url}</a>
               </li>
             `
           )
           .join("")
-      : `<li style="color: #94a3b8;">No videos uploaded</li>`;
+      : `<li style="color: #94a3b8; list-style:none;">No videos uploaded</li>`;
+
+  const imageList =
+    imageUrls.length > 0
+      ? imageUrls
+          .map(
+            (url, index) => `
+              <li style="margin-bottom: 12px; list-style: none;">
+                <div style="font-weight: 600; color:#1e293b; margin-bottom: 6px;">Image ${index + 1}</div>
+                <a href="${url}" style="display:inline-block; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
+                  <img src="${url}" alt="Uploaded image ${index + 1}" style="display:block; width:220px; height:auto;" />
+                </a>
+                <div style="font-size: 12px; color: #64748b; margin-top: 6px; word-break: break-all;">${url}</div>
+              </li>
+            `
+          )
+          .join("")
+      : `<li style="color: #94a3b8; list-style:none;">No images uploaded</li>`;
 
   const html = `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; background:#f1f5f9; padding:32px;">
@@ -100,20 +117,15 @@ export async function POST(req) {
           <h2 style="margin:0 0 12px; font-size:18px; color:#0f172a;">Submitted Files</h2>
 
           <div style="margin-bottom: 20px;">
-            <h3 style="margin:0 0 8px; font-size:16px; color:#1e293b;">Player Image</h3>
-            ${
-              imageUrl
-                ? `<a href="${imageUrl}" style="display:inline-block; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
-                    <img src="${imageUrl}" alt="Player image" style="display:block; width:220px; height:auto;" />
-                  </a>
-                  <div style="font-size:12px; color:#64748b; margin-top:6px; word-break:break-all;">${imageUrl}</div>`
-                : `<p style="margin:0; color:#94a3b8;">No image uploaded</p>`
-            }
+            <h3 style="margin:0 0 8px; font-size:16px; color:#1e293b;">Images</h3>
+            <ul style="margin:0; padding-left:0;">
+              ${imageList}
+            </ul>
           </div>
 
           <div>
             <h3 style="margin:0 0 8px; font-size:16px; color:#1e293b;">Video Files</h3>
-            <ul style="margin:0; padding-left: 18px; color:#0f172a; font-size:14px;">
+            <ul style="margin:0; padding-left: 0; color:#0f172a; font-size:14px;">
               ${videoList}
             </ul>
           </div>
