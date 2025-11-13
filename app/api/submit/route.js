@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import crypto from "node:crypto";
 
 function buildResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -42,6 +43,8 @@ export async function POST(req) {
   const { form = {}, videoUrls = [], imageUrls = [] } = payload || {};
   const submitterEmail = typeof form.email === "string" ? form.email.trim() : "";
   const replyTo = isValidEmail(submitterEmail) ? submitterEmail : undefined;
+  const ticketId = crypto.randomUUID().slice(0, 8);
+  const subject = `New video submission${submitterEmail ? ` from ${submitterEmail}` : ""} · #${ticketId}`;
 
   const formatLabel = (key) =>
     key
@@ -151,11 +154,11 @@ export async function POST(req) {
 
   try {
     const response = await resend.emails.send({
-            from: staticFrom,
-            to: ownerEmail,
-      subject: "New video submission",
-            html,
-            ...(replyTo ? { reply_to: replyTo } : {}),
+      from: staticFrom,
+      to: ownerEmail,
+      subject,
+      html,
+      ...(replyTo ? { reply_to: replyTo } : {}),
     });
 
     if (response.error) {

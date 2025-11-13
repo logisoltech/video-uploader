@@ -660,7 +660,7 @@ export default function Home() {
                 <span className="text-[#d93025]">*</span>
               </span>
               <textarea
-                placeholder="Example: Cut between 00:10 and 01:25"
+                placeholder="Example Format: Video Name: Begin Time - End Time, Video Name: Begin Time - End Time, ..."
                 rows={3}
                 required
                 value={form.videoCutInstructions}
