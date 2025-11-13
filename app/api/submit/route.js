@@ -13,6 +13,29 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+function buildFromAddress() {
+  const fromEmail = typeof process.env.FROM_EMAIL === "string" ? process.env.FROM_EMAIL.trim() : "";
+  const fromName = typeof process.env.FROM_NAME === "string" ? process.env.FROM_NAME.trim() : "";
+
+  if (!fromEmail) return null;
+
+  if (isValidEmail(fromEmail)) {
+    return fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+  }
+
+  const match = fromEmail.match(/^(.+?)\s*<([^<>]+)>$/);
+  if (match) {
+    const namePart = match[1].trim();
+    const emailPart = match[2].trim();
+
+    if (isValidEmail(emailPart)) {
+      return namePart ? `${namePart} <${emailPart}>` : emailPart;
+    }
+  }
+
+  return null;
+}
+
 export async function POST(req) {
   const resend = buildResendClient();
 
@@ -20,12 +43,19 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: "RESEND_API_KEY not configured." }, { status: 400 });
   }
 
-  const staticFrom = process.env.FROM_EMAIL;
-  const ownerEmail = process.env.OWNER_EMAIL;
+  const staticFrom = buildFromAddress();
+  const ownerEmail = typeof process.env.OWNER_EMAIL === "string" ? process.env.OWNER_EMAIL.trim() : "";
 
-  if (!staticFrom || !ownerEmail) {
+  if (!staticFrom) {
     return NextResponse.json(
-      { ok: false, error: "FROM_EMAIL and OWNER_EMAIL must be configured." },
+      { ok: false, error: "FROM_EMAIL must be a valid email or formatted as 'Name <email@example.com>'." },
+      { status: 400 }
+    );
+  }
+
+  if (!isValidEmail(ownerEmail)) {
+    return NextResponse.json(
+      { ok: false, error: "OWNER_EMAIL must be configured with a valid email address." },
       { status: 400 }
     );
   }
