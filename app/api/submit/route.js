@@ -14,10 +14,17 @@ function isValidEmail(value) {
 }
 
 function buildFromAddress() {
-  const fromEmail = typeof process.env.FROM_EMAIL === "string" ? process.env.FROM_EMAIL.trim() : "";
+  let fromEmail = typeof process.env.FROM_EMAIL === "string" ? process.env.FROM_EMAIL.trim() : "";
   const fromName = typeof process.env.FROM_NAME === "string" ? process.env.FROM_NAME.trim() : "";
 
   if (!fromEmail) return null;
+
+  if (
+    (fromEmail.startsWith('"') && fromEmail.endsWith('"')) ||
+    (fromEmail.startsWith("'") && fromEmail.endsWith("'"))
+  ) {
+    fromEmail = fromEmail.slice(1, -1).trim();
+  }
 
   if (isValidEmail(fromEmail)) {
     return fromName ? `${fromName} <${fromEmail}>` : fromEmail;
