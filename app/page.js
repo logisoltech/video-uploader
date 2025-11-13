@@ -328,7 +328,7 @@ export default function Home() {
       alert("Submission sent! Redirecting to home page...");
       const timeout = setTimeout(() => {
         window.location.href = "https://www.athleteclips.com/";
-      }, 2000);
+      }, 1000);
       return () => clearTimeout(timeout);
     }
     return undefined;
