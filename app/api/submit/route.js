@@ -7,6 +7,11 @@ function buildResendClient() {
   return new Resend(apiKey);
 }
 
+function isValidEmail(value) {
+  if (typeof value !== "string") return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export async function POST(req) {
   const resend = buildResendClient();
 
@@ -14,10 +19,10 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: "RESEND_API_KEY not configured." }, { status: 400 });
   }
 
-  const from = process.env.FROM_EMAIL;
-  const to = process.env.OWNER_EMAIL;
+  const staticFrom = process.env.FROM_EMAIL;
+  const ownerEmail = process.env.OWNER_EMAIL;
 
-  if (!from || !to) {
+  if (!staticFrom || !ownerEmail) {
     return NextResponse.json(
       { ok: false, error: "FROM_EMAIL and OWNER_EMAIL must be configured." },
       { status: 400 }
@@ -35,6 +40,8 @@ export async function POST(req) {
   }
 
   const { form = {}, videoUrls = [], imageUrls = [] } = payload || {};
+  const submitterEmail = typeof form.email === "string" ? form.email.trim() : "";
+  const replyTo = isValidEmail(submitterEmail) ? submitterEmail : undefined;
 
   const formatLabel = (key) =>
     key
@@ -85,7 +92,7 @@ export async function POST(req) {
     imageUrls.length > 0
       ? imageUrls
           .map(
-            (url, index) => `
+                (url, index) => `
               <li style="margin-bottom: 12px; list-style: none;">
                 <div style="font-weight: 600; color:#1e293b; margin-bottom: 6px;">Image ${index + 1}</div>
                 <a href="${url}" style="display:inline-block; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
@@ -108,6 +115,14 @@ export async function POST(req) {
 
         <div style="padding:28px;">
           <h2 style="margin:0 0 16px; font-size:18px; color:#0f172a;">Player &amp; Contact Details</h2>
+          ${
+            submitterEmail
+              ? `<p style="margin:0 0 12px; font-size:14px; color:#1e293b;">
+                    <strong style="display:inline-block; width:110px;">Email:</strong>
+                    <a href="mailto:${submitterEmail}" style="color:#0c68ff; text-decoration:none;">${submitterEmail}</a>
+                 </p>`
+              : ""
+          }
           <table style="border-collapse: collapse; width: 100%; margin-bottom: 28px; border-radius: 8px; overflow: hidden;">
             <tbody>
               ${formRows}
@@ -136,10 +151,11 @@ export async function POST(req) {
 
   try {
     const response = await resend.emails.send({
-      from,
-      to,
+            from: staticFrom,
+            to: ownerEmail,
       subject: "New video submission",
-      html,
+            html,
+            ...(replyTo ? { reply_to: replyTo } : {}),
     });
 
     if (response.error) {
