@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FaFacebook, FaGoogle, FaTwitter, FaYelp } from "react-icons/fa";
 
 const initialForm = {
   phoneNumber: "",
+  email: "",
   playerFirstName: "",
   playerLastName: "",
   graduationYear: "",
@@ -56,8 +60,10 @@ async function uploadFileToR2(file, onProgress) {
       throw new Error(`Failed to upload part ${index + 1}`);
     }
 
-    let etag = uploadRes.headers.get("ETag") || "";
-    etag = etag.replace(/"/g, "");
+    let etag = uploadRes.headers.get("ETag") || uploadRes.headers.get("etag") || "";
+    if (!etag) {
+      throw new Error("Upload part missing ETag.");
+    }
 
     parts.push({ ETag: etag, PartNumber: index + 1 });
 
@@ -192,6 +198,10 @@ export default function Home() {
   };
 
   const validateBeforeSubmit = () => {
+    if (!form.email.trim()) {
+      setStatus({ type: "error", message: "Email is required." });
+      return false;
+    }
     if (!form.playerFirstName.trim() || !form.playerLastName.trim()) {
       setStatus({ type: "error", message: "Player name is required." });
       return false;
@@ -263,6 +273,7 @@ export default function Home() {
         body: JSON.stringify({
           form: {
             phoneNumber: form.phoneNumber,
+            email: form.email,
             playerFirstName: form.playerFirstName,
             playerLastName: form.playerLastName,
             graduationYear: form.graduationYear,
@@ -312,6 +323,16 @@ export default function Home() {
     [imageFiles]
   );
 
+  useEffect(() => {
+    if (status.type === "success") {
+      alert("Submission sent! Redirecting to home page...");
+      const timeout = setTimeout(() => {
+        window.location.href = "https://www.athleteclips.com/";
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+    return undefined;
+  }, [status.type]);
   const videoFileList = useMemo(
     () =>
       videoFiles.map((file, index) => ({
@@ -322,31 +343,40 @@ export default function Home() {
     [videoFiles]
   );
 
+  const socialLinks = [
+    { href: "https://www.facebook.com/athleteclips", label: "Facebook", icon: FaFacebook },
+    { href: "https://twitter.com/athleteclips", label: "Twitter", icon: FaTwitter },
+    { href: "https://www.yelp.com", label: "Yelp", icon: FaYelp },
+    { href: "https://www.google.com/maps", label: "Google", icon: FaGoogle },
+  ];
+
   return (
     <div className="min-h-screen bg-white">
       <header className="flex flex-col gap-4 bg-white px-8 py-6 shadow md:flex-row md:items-center md:justify-between md:px-16">
-        <div className="text-lg font-semibold uppercase tracking-[0.06em] text-slate-900">
-          
+        <div className="flex items-center gap-3 text-lg font-semibold uppercase tracking-[0.06em] text-slate-900">
+          <Link href="https://www.athleteclips.com/" className="flex items-center gap-3">
+            <Image src="/logo.webp" alt="Athlete Clips" width={150} height={52} className="h-12 w-auto" priority />
+          </Link>
         </div>
         <nav>
           <ul className="flex items-center gap-6 text-base font-medium text-[#0070b8]">
             <li>
-              <a className="transition hover:text-[#004f7c]" href="#">
+              <Link href="https://www.athleteclips.com/" className="transition hover:text-[#004f7c]">
                 Home
-              </a>
+              </Link>
             </li>
             <li>
-              <a className="transition hover:text-[#004f7c]" href="#">
+              <Link href="https://www.athleteclips.com/contact" className="transition hover:text-[#004f7c]">
                 Contact
-              </a>
+              </Link>
             </li>
             <li>
-              <a
-                className="rounded bg-[#007dc5] px-6 py-2 font-semibold text-white transition hover:bg-[#006bad]"
-                href="#"
+              <Link
+                href="https://www.athleteclips.com/package-pricing"
+                className="rounded-md bg-[#004f7c] px-3 py-2 text-white transition hover:bg-[#003b73]"
               >
                 Package Pricing
-              </a>
+              </Link>
             </li>
           </ul>
         </nav>
@@ -358,6 +388,17 @@ export default function Home() {
             Upload Video
           </h1>
           <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
+            <label className="flex flex-col text-base font-semibold text-slate-600">
+              Email Address
+              <input
+                type="email"
+                placeholder="Enter your email address"
+                value={form.email}
+                onChange={handleChange("email")}
+                className="mt-3 rounded border border-slate-300 px-4 py-4 text-base font-normal text-slate-700 placeholder:text-slate-400 focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
+              />
+            </label>
+
             <label className="flex flex-col text-base font-semibold text-slate-600">
               Your Phone Number
               <input
@@ -660,6 +701,70 @@ export default function Home() {
           </form>
         </section>
       </main>
+
+      <section className="relative isolate overflow-hidden">
+        <div className="absolute inset-0">
+          <Image
+            src="/volley.webp"
+            alt="Volleyball background"
+            fill
+            className="object-cover"
+            sizes="100vw"
+            priority
+          />
+          <div className="absolute inset-0 bg-black/60" />
+        </div>
+
+        <div className="relative flex flex-col items-center gap-6 px-6 py-16 text-white md:gap-7 md:py-20">
+          <div className="relative h-40 w-72 sm:h-48 sm:w-80">
+            <Image
+              src="/logo.webp"
+              alt="Athlete Clips logo"
+              fill
+              className="object-contain"
+              sizes="320px"
+              priority
+            />
+            
+          </div>
+
+          <a
+            href="mailto:info@athleteclips.com"
+            className="text-lg font-semibold tracking-wide underline-offset-4 transition hover:underline"
+          >
+            info@athleteclips.com
+          </a>
+
+          <div className="flex items-center gap-4">
+            {socialLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                aria-label={link.label}
+                className="flex h-12 w-12 items-center justify-center rounded bg-white text-xl text-[#1d1b8f] shadow transition hover:bg-[#1d1b8f] hover:text-white"
+              >
+                <link.icon />
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer className="bg-[#0d6bc7] text-white">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-6 py-6 text-sm md:flex-row md:justify-between md:text-base">
+          <p className="text-center md:text-left">
+            Copyright © {new Date().getFullYear()} Athlete Clips | Powered by Athlete Clips
+          </p>
+          <nav className="flex items-center gap-6 text-sm font-semibold uppercase tracking-wide">
+            <a className="transition hover:text-white/70" href="https://www.athleteclips.com/">
+              Home
+            </a>
+            <a className="transition hover:text-white/70" href="https://www.athleteclips.com/contact">
+              Contact
+            </a>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }
