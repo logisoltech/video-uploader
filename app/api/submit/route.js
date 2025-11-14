@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import crypto from "node:crypto";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 function buildResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -11,6 +11,87 @@ function buildResendClient() {
 function isValidEmail(value) {
   if (typeof value !== "string") return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+const ticketClient =
+  process.env.S3_BUCKET && process.env.S3_REGION && process.env.S3_ENDPOINT
+    ? new S3Client({
+        region: process.env.S3_REGION,
+        endpoint: process.env.S3_ENDPOINT,
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY_ID,
+          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+        },
+        forcePathStyle: true,
+      })
+    : null;
+
+async function streamToString(readable) {
+  const chunks = [];
+  for await (const chunk of readable ?? []) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function getNextTicketId() {
+  if (!ticketClient) {
+    throw new Error("S3 configuration missing for ticket counter.");
+  }
+
+  const bucket = process.env.S3_BUCKET;
+  const counterKey = process.env.TICKET_COUNTER_KEY || "tickets/counter.txt";
+  const startValue = Number.parseInt(process.env.TICKET_COUNTER_START || "1830", 10);
+  const initialCounter = Number.isFinite(startValue) ? startValue - 1 : 1829;
+
+  let current = initialCounter;
+  let etag;
+
+  try {
+    const existing = await ticketClient.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: counterKey,
+      })
+    );
+
+    etag = existing.ETag;
+
+    if (existing.Body) {
+      const body = await streamToString(existing.Body);
+      const parsed = Number.parseInt(body.trim(), 10);
+      if (Number.isFinite(parsed)) {
+        current = parsed;
+      }
+    }
+  } catch (error) {
+    const status = error?.$metadata?.httpStatusCode;
+    const code = error?.name || error?.Code;
+    if (status !== 404 && code !== "NoSuchKey" && code !== "NotFound") {
+      throw error;
+    }
+  }
+
+  const nextTicket = current + 1;
+
+  try {
+    await ticketClient.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: counterKey,
+        Body: String(nextTicket),
+        ContentType: "text/plain",
+        ...(etag ? { IfMatch: etag } : { IfNoneMatch: "*" }),
+      })
+    );
+  } catch (error) {
+    if ((error?.name || error?.Code) === "PreconditionFailed") {
+      return getNextTicketId();
+    }
+    throw error;
+  }
+
+  return nextTicket;
 }
 
 function buildFromAddress() {
@@ -67,6 +148,20 @@ export async function POST(req) {
     );
   }
 
+  let ticketId;
+  try {
+    ticketId = await getNextTicketId();
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Unable to allocate ticket ID.",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+
   let payload;
   try {
     payload = await req.json();
@@ -80,7 +175,6 @@ export async function POST(req) {
   const { form = {}, videoUrls = [], imageUrls = [] } = payload || {};
   const submitterEmail = typeof form.email === "string" ? form.email.trim() : "";
   const replyTo = isValidEmail(submitterEmail) ? submitterEmail : undefined;
-  const ticketId = crypto.randomUUID().slice(0, 8);
   const subject = `New video submission${submitterEmail ? ` from ${submitterEmail}` : ""} · #${ticketId}`;
 
   const formatLabel = (key) =>
@@ -204,18 +298,20 @@ export async function POST(req) {
           ok: false,
           error: response.error?.message || "Resend reported an error.",
           data: response,
+          ticketId,
         },
         { status: 502 }
       );
     }
 
-    return NextResponse.json({ ok: true, id: response.data?.id });
+    return NextResponse.json({ ok: true, id: response.data?.id, ticketId });
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
         error: "Failed to send email with Resend.",
         details: error instanceof Error ? error.message : String(error),
+        ticketId,
       },
       { status: 500 }
     );
