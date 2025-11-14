@@ -24,7 +24,7 @@ const initialForm = {
   videoLinks: "",
 };
 
-async function uploadFileToR2(file, onProgress) {
+async function uploadFileToR2(file, { onProgress, signal } = {}) {
   const createRes = await fetch("/api/upload/create-multipart", {
     method: "POST",
     headers: {
@@ -35,6 +35,7 @@ async function uploadFileToR2(file, onProgress) {
       contentType: file.type || "application/octet-stream",
       size: file.size,
     }),
+    signal,
   });
 
   if (!createRes.ok) {
@@ -54,6 +55,7 @@ async function uploadFileToR2(file, onProgress) {
     const uploadRes = await fetch(urls[index], {
       method: "PUT",
       body: blob,
+      signal,
     });
 
     if (!uploadRes.ok) {
@@ -67,7 +69,7 @@ async function uploadFileToR2(file, onProgress) {
 
     parts.push({ ETag: etag, PartNumber: index + 1 });
 
-    if (onProgress) {
+    if (typeof onProgress === "function") {
       onProgress(((index + 1) / totalParts) * 100);
     }
   }
@@ -78,6 +80,7 @@ async function uploadFileToR2(file, onProgress) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ key, uploadId, parts }),
+    signal,
   });
 
   if (!completeRes.ok) {
@@ -102,6 +105,10 @@ export default function Home() {
 
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
+  const imageUploadControllersRef = useRef(new Map());
+  const videoUploadControllersRef = useRef(new Map());
+  const cancelledImageKeysRef = useRef(new Set());
+  const cancelledVideoKeysRef = useRef(new Set());
 
   const hasImageSelection = imageFiles.length > 0;
   const hasVideoSelection = videoFiles.length > 0;
@@ -120,6 +127,10 @@ export default function Home() {
     if (!files.length) {
       return;
     }
+
+    files.forEach((file) => {
+      cancelledImageKeysRef.current.delete(makeFileKey(file));
+    });
 
     setImageFiles((prev) => {
       const merged = new Map(prev.map((file) => [makeFileKey(file), file]));
@@ -144,6 +155,13 @@ export default function Home() {
   };
 
   const handleRemoveImage = (fileKey) => {
+    cancelledImageKeysRef.current.add(fileKey);
+    const controller = imageUploadControllersRef.current.get(fileKey);
+    if (controller) {
+      controller.abort();
+      imageUploadControllersRef.current.delete(fileKey);
+    }
+
     setImageFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
     setImageProgress((prev) => {
       const { [fileKey]: _removed, ...rest } = prev;
@@ -156,6 +174,10 @@ export default function Home() {
     if (!files.length) {
       return;
     }
+
+    files.forEach((file) => {
+      cancelledVideoKeysRef.current.delete(makeFileKey(file));
+    });
 
     setVideoFiles((prev) => {
       const merged = new Map(prev.map((file) => [makeFileKey(file), file]));
@@ -180,6 +202,13 @@ export default function Home() {
   };
 
   const handleRemoveVideo = (fileKey) => {
+    cancelledVideoKeysRef.current.add(fileKey);
+    const controller = videoUploadControllersRef.current.get(fileKey);
+    if (controller) {
+      controller.abort();
+      videoUploadControllersRef.current.delete(fileKey);
+    }
+
     setVideoFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
     setVideoProgress((prev) => {
       const { [fileKey]: _removed, ...rest } = prev;
@@ -188,6 +217,13 @@ export default function Home() {
   };
 
   const resetForm = () => {
+    imageUploadControllersRef.current.forEach((controller) => controller.abort());
+    imageUploadControllersRef.current.clear();
+    videoUploadControllersRef.current.forEach((controller) => controller.abort());
+    videoUploadControllersRef.current.clear();
+    cancelledImageKeysRef.current.clear();
+    cancelledVideoKeysRef.current.clear();
+
     setForm(initialForm);
     setImageFiles([]);
     setVideoFiles([]);
@@ -242,14 +278,41 @@ export default function Home() {
         const file = imageFiles[index];
         const fileKey = makeFileKey(file);
 
-        const result = await uploadFileToR2(file, (progress) => {
-          setImageProgress((prev) => ({
-            ...prev,
-            [fileKey]: progress,
-          }));
-        });
+        if (cancelledImageKeysRef.current.has(fileKey)) {
+          cancelledImageKeysRef.current.delete(fileKey);
+          continue;
+        }
 
-        imageUploads.push({ ...result, name: file.name, label: fileKey });
+        const controller = new AbortController();
+        imageUploadControllersRef.current.set(fileKey, controller);
+
+        try {
+          const result = await uploadFileToR2(file, {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              setImageProgress((prev) => ({
+                ...prev,
+                [fileKey]: progress,
+              }));
+            },
+          });
+
+          if (cancelledImageKeysRef.current.has(fileKey)) {
+            cancelledImageKeysRef.current.delete(fileKey);
+            continue;
+          }
+
+          imageUploads.push({ ...result, name: file.name, label: fileKey });
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            cancelledImageKeysRef.current.delete(fileKey);
+            continue;
+          }
+
+          throw error;
+        } finally {
+          imageUploadControllersRef.current.delete(fileKey);
+        }
       }
 
       const videoUploads = [];
@@ -257,14 +320,41 @@ export default function Home() {
         const file = videoFiles[index];
         const fileKey = makeFileKey(file);
 
-        const result = await uploadFileToR2(file, (progress) => {
-          setVideoProgress((prev) => ({
-            ...prev,
-            [fileKey]: progress,
-          }));
-        });
+        if (cancelledVideoKeysRef.current.has(fileKey)) {
+          cancelledVideoKeysRef.current.delete(fileKey);
+          continue;
+        }
 
-        videoUploads.push({ ...result, name: file.name, label: fileKey });
+        const controller = new AbortController();
+        videoUploadControllersRef.current.set(fileKey, controller);
+
+        try {
+          const result = await uploadFileToR2(file, {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              setVideoProgress((prev) => ({
+                ...prev,
+                [fileKey]: progress,
+              }));
+            },
+          });
+
+          if (cancelledVideoKeysRef.current.has(fileKey)) {
+            cancelledVideoKeysRef.current.delete(fileKey);
+            continue;
+          }
+
+          videoUploads.push({ ...result, name: file.name, label: fileKey });
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            cancelledVideoKeysRef.current.delete(fileKey);
+            continue;
+          }
+
+          throw error;
+        } finally {
+          videoUploadControllersRef.current.delete(fileKey);
+        }
       }
 
       const response = await fetch("/api/submit", {
