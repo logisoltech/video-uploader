@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaFacebook, FaGoogle, FaTwitter, FaYelp } from "react-icons/fa";
 
 const initialForm = {
@@ -24,7 +24,7 @@ const initialForm = {
   videoLinks: "",
 };
 
-async function uploadFileToR2(file, { onProgress, signal } = {}) {
+async function uploadFileToR2(file, { onProgress, onSetup, signal } = {}) {
   const createRes = await fetch("/api/upload/create-multipart", {
     method: "POST",
     headers: {
@@ -44,6 +44,11 @@ async function uploadFileToR2(file, { onProgress, signal } = {}) {
   }
 
   const { uploadId, key, partSize, urls } = await createRes.json();
+
+  if (typeof onSetup === "function") {
+    onSetup({ uploadId, key });
+  }
+
   const parts = [];
   const totalParts = urls.length || 1;
 
@@ -109,6 +114,27 @@ export default function Home() {
   const videoUploadControllersRef = useRef(new Map());
   const cancelledImageKeysRef = useRef(new Set());
   const cancelledVideoKeysRef = useRef(new Set());
+  const imageUploadSessionsRef = useRef(new Map());
+  const videoUploadSessionsRef = useRef(new Map());
+
+  const abortMultipartOnServer = useCallback(async ({ key, uploadId }) => {
+    if (!key || !uploadId) return;
+
+    try {
+      const response = await fetch("/api/upload/abort-multipart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, uploadId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        console.warn("Failed to abort multipart upload:", error?.error || response.statusText);
+      }
+    } catch (error) {
+      console.warn("Error aborting multipart upload:", error);
+    }
+  }, []);
 
   const hasImageSelection = imageFiles.length > 0;
   const hasVideoSelection = videoFiles.length > 0;
@@ -162,6 +188,15 @@ export default function Home() {
       imageUploadControllersRef.current.delete(fileKey);
     }
 
+    const session = imageUploadSessionsRef.current.get(fileKey);
+    if (session) {
+      abortMultipartOnServer(session).finally(() => {
+        imageUploadSessionsRef.current.delete(fileKey);
+      });
+    } else {
+      imageUploadSessionsRef.current.delete(fileKey);
+    }
+
     setImageFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
     setImageProgress((prev) => {
       const { [fileKey]: _removed, ...rest } = prev;
@@ -209,6 +244,15 @@ export default function Home() {
       videoUploadControllersRef.current.delete(fileKey);
     }
 
+    const session = videoUploadSessionsRef.current.get(fileKey);
+    if (session) {
+      abortMultipartOnServer(session).finally(() => {
+        videoUploadSessionsRef.current.delete(fileKey);
+      });
+    } else {
+      videoUploadSessionsRef.current.delete(fileKey);
+    }
+
     setVideoFiles((prev) => prev.filter((file) => makeFileKey(file) !== fileKey));
     setVideoProgress((prev) => {
       const { [fileKey]: _removed, ...rest } = prev;
@@ -223,6 +267,8 @@ export default function Home() {
     videoUploadControllersRef.current.clear();
     cancelledImageKeysRef.current.clear();
     cancelledVideoKeysRef.current.clear();
+    imageUploadSessionsRef.current.clear();
+    videoUploadSessionsRef.current.clear();
 
     setForm(initialForm);
     setImageFiles([]);
@@ -289,6 +335,9 @@ export default function Home() {
         try {
           const result = await uploadFileToR2(file, {
             signal: controller.signal,
+            onSetup: ({ uploadId, key: uploadKey }) => {
+              imageUploadSessionsRef.current.set(fileKey, { uploadId, key: uploadKey });
+            },
             onProgress: (progress) => {
               setImageProgress((prev) => ({
                 ...prev,
@@ -299,13 +348,24 @@ export default function Home() {
 
           if (cancelledImageKeysRef.current.has(fileKey)) {
             cancelledImageKeysRef.current.delete(fileKey);
+            const session = imageUploadSessionsRef.current.get(fileKey);
+            if (session) {
+              await abortMultipartOnServer(session);
+              imageUploadSessionsRef.current.delete(fileKey);
+            }
             continue;
           }
 
           imageUploads.push({ ...result, name: file.name, label: fileKey });
+          imageUploadSessionsRef.current.delete(fileKey);
         } catch (error) {
           if (error?.name === "AbortError") {
             cancelledImageKeysRef.current.delete(fileKey);
+            const session = imageUploadSessionsRef.current.get(fileKey);
+            if (session) {
+              await abortMultipartOnServer(session);
+              imageUploadSessionsRef.current.delete(fileKey);
+            }
             continue;
           }
 
@@ -331,6 +391,9 @@ export default function Home() {
         try {
           const result = await uploadFileToR2(file, {
             signal: controller.signal,
+            onSetup: ({ uploadId, key: uploadKey }) => {
+              videoUploadSessionsRef.current.set(fileKey, { uploadId, key: uploadKey });
+            },
             onProgress: (progress) => {
               setVideoProgress((prev) => ({
                 ...prev,
@@ -341,13 +404,24 @@ export default function Home() {
 
           if (cancelledVideoKeysRef.current.has(fileKey)) {
             cancelledVideoKeysRef.current.delete(fileKey);
+            const session = videoUploadSessionsRef.current.get(fileKey);
+            if (session) {
+              await abortMultipartOnServer(session);
+              videoUploadSessionsRef.current.delete(fileKey);
+            }
             continue;
           }
 
           videoUploads.push({ ...result, name: file.name, label: fileKey });
+          videoUploadSessionsRef.current.delete(fileKey);
         } catch (error) {
           if (error?.name === "AbortError") {
             cancelledVideoKeysRef.current.delete(fileKey);
+            const session = videoUploadSessionsRef.current.get(fileKey);
+            if (session) {
+              await abortMultipartOnServer(session);
+              videoUploadSessionsRef.current.delete(fileKey);
+            }
             continue;
           }
 
