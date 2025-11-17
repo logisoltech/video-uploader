@@ -857,11 +857,12 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="mt-2 inline-flex w-max items-center justify-center rounded bg-[#007dc5] px-10 py-3 text-base font-semibold text-white transition hover:bg-[#006bad] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/40 disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-2 inline-flex items-center justify-center rounded bg-[#007dc5] px-10 py-3 text-base font-semibold text-white transition hover:bg-[#006bad] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/40 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSubmitting ? "Submitting..." : "Submit"}
               </button>
             </div>
+              <p className="text-sm text-slate-500">Note: After hitting the submit button, no further changes can be made to the form.</p>
           </form>
         </section>
       </main>
