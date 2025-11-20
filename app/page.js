@@ -558,9 +558,13 @@ export default function Home() {
           </h1>
           <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
             <label className="flex flex-col text-base font-semibold text-slate-600">
-              Email Address
+              <span className="inline-flex items-center gap-1">
+                Email Address
+                <span className="text-[#d93025]">*</span>
+              </span>
               <input
                 type="email"
+                required
                 placeholder="Enter your email address"
                 value={form.email}
                 onChange={handleChange("email")}
