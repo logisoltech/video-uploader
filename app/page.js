@@ -24,7 +24,7 @@ const initialForm = {
   videoLinks: "",
 };
 
-async function uploadFileToR2(file, { onProgress, onSetup, signal } = {}) {
+async function uploadFileToR2(file, { email, onProgress, onSetup, signal } = {}) {
   const createRes = await fetch("/api/upload/create-multipart", {
     method: "POST",
     headers: {
@@ -34,6 +34,7 @@ async function uploadFileToR2(file, { onProgress, onSetup, signal } = {}) {
       filename: file.name,
       contentType: file.type || "application/octet-stream",
       size: file.size,
+      email,
     }),
     signal,
   });
@@ -319,6 +320,8 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
+      const normalizedEmail = (form.email || "").trim();
+
       const imageUploads = [];
       for (let index = 0; index < imageFiles.length; index += 1) {
         const file = imageFiles[index];
@@ -334,6 +337,7 @@ export default function Home() {
 
         try {
           const result = await uploadFileToR2(file, {
+            email: normalizedEmail,
             signal: controller.signal,
             onSetup: ({ uploadId, key: uploadKey }) => {
               imageUploadSessionsRef.current.set(fileKey, { uploadId, key: uploadKey });
@@ -390,6 +394,7 @@ export default function Home() {
 
         try {
           const result = await uploadFileToR2(file, {
+            email: normalizedEmail,
             signal: controller.signal,
             onSetup: ({ uploadId, key: uploadKey }) => {
               videoUploadSessionsRef.current.set(fileKey, { uploadId, key: uploadKey });

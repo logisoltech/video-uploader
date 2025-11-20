@@ -17,7 +17,7 @@ const s3 = new S3Client({
 });
 
 export async function POST(req) {
-  const { filename, contentType, size } = await req.json();
+  const { filename, contentType, size, email } = await req.json();
 
   const PART_SIZE = 10 * 1024 * 1024;
   const partCount = Math.ceil(size / PART_SIZE);
@@ -25,7 +25,16 @@ export async function POST(req) {
     return NextResponse.json({ error: "File too large" }, { status: 400 });
   }
 
-  const key = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}-${filename}`;
+  const sanitizedEmail =
+    typeof email === "string" && email.trim() ? email.trim().replace(/[@.]/g, "_") : "";
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).slice(2);
+
+  const keyParts = ["uploads"];
+  if (sanitizedEmail) keyParts.push(sanitizedEmail);
+  keyParts.push(`${timestamp}-${randomSuffix}-${filename}`);
+
+  const key = keyParts.join("/");
 
   const created = await s3.send(
     new CreateMultipartUploadCommand({
