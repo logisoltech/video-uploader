@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { readFile } from "fs/promises";
+import { join } from "path";
 
 function buildResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -172,10 +174,57 @@ export async function POST(req) {
     );
   }
 
-  const { form = {}, videoUrls = [], imageUrls = [] } = payload || {};
+  const { form = {}, videoUrls = [], imageUrls = [], templateType, selectedTemplate } = payload || {};
   const submitterEmail = typeof form.email === "string" ? form.email.trim() : "";
   const replyTo = isValidEmail(submitterEmail) ? submitterEmail : undefined;
   const subject = `New video submission${submitterEmail ? ` from ${submitterEmail}` : ""} · #${ticketId}`;
+
+  // Upload selected template image to R2 if template is selected
+  let templateImageUrl = null;
+  if ((templateType === "static" || templateType === "animated") && selectedTemplate && typeof selectedTemplate === "number") {
+    try {
+      let templateImagePath;
+      let contentType;
+      let fileName;
+      
+      const sanitizedEmail = submitterEmail ? submitterEmail.trim().replace(/[@.]/g, "_") : "";
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).slice(2);
+      
+      if (templateType === "static") {
+        templateImagePath = join(process.cwd(), "public", `template${selectedTemplate}.webp`);
+        contentType = "image/webp";
+        fileName = `template-${timestamp}-${randomSuffix}-template${selectedTemplate}.webp`;
+      } else {
+        templateImagePath = join(process.cwd(), "public", `animated-template-${selectedTemplate}.png`);
+        contentType = "image/png";
+        fileName = `template-${timestamp}-${randomSuffix}-animated-template-${selectedTemplate}.png`;
+      }
+      
+      const templateImageBuffer = await readFile(templateImagePath);
+      
+      const keyParts = ["uploads"];
+      if (sanitizedEmail) keyParts.push(sanitizedEmail);
+      keyParts.push(fileName);
+      const templateKey = keyParts.join("/");
+
+      if (ticketClient) {
+        await ticketClient.send(
+          new PutObjectCommand({
+            Bucket: process.env.S3_BUCKET,
+            Key: templateKey,
+            Body: templateImageBuffer,
+            ContentType: contentType,
+          })
+        );
+
+        const base = process.env.PUBLIC_FILE_BASE_URL;
+        templateImageUrl = base ? `${base.replace(/\/+$/, "")}/${templateKey}` : templateKey;
+      }
+    } catch (error) {
+      console.error("Failed to upload template image:", error);
+    }
+  }
 
   const formatLabel = (key) =>
     key
@@ -192,6 +241,7 @@ export async function POST(req) {
   };
 
   const formRows = Object.entries(form)
+    .filter(([key]) => !["uploadedImageKeys", "uploadedVideoKeys"].includes(key))
     .map(
       ([key, value]) => `
         <tr>
@@ -278,6 +328,46 @@ export async function POST(req) {
               ${videoList}
             </ul>
           </div>
+          ${
+            templateType || selectedTemplate
+              ? `
+          <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+            <h3 style="margin:0 0 8px; font-size:16px; color:#1e293b;">Template Selection</h3>
+            <table style="border-collapse: collapse; width: 100%;">
+              <tbody>
+                <tr>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; background:#f8fafc; font-weight: 600; width: 35%;">
+                    Template Type
+                  </td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
+                    <span style="font-weight: 500; color:#1e293b;">${templateType === "static" ? "Static" : templateType === "animated" ? "Animated" : "N/A"}</span>
+                  </td>
+                </tr>
+                ${
+                  templateImageUrl && (templateType === "static" || templateType === "animated")
+                    ? `
+                <tr>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; background:#f8fafc; font-weight: 600; width: 35%;">
+                    Template Requested
+                  </td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
+                    <div style="margin-top: 8px;">
+                      <a href="${templateImageUrl}" style="display:inline-block; border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;">
+                        <img src="${templateImageUrl}" alt="${templateType === "static" ? "Selected template" : "Animated template"} ${selectedTemplate}" style="display:block; width:400px; height:auto; max-width:100%;" />
+                      </a>
+                      <div style="font-size: 12px; color: #64748b; margin-top: 6px;">${templateType === "static" ? "Template" : "Animated Template"} ${selectedTemplate}</div>
+                    </div>
+                  </td>
+                </tr>
+                `
+                    : ""
+                }
+              </tbody>
+            </table>
+          </div>
+          `
+              : ""
+          }
         </div>
       </div>
     </div>

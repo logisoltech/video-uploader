@@ -24,6 +24,15 @@ const initialForm = {
   videoLinks: "",
 };
 
+const animatedTemplateVideos = {
+  1: "na_-1PU-1LU",
+  2: "D3urcZybv-E",
+  3: "jGUcirafChE",
+  4: "cBLQ-Ww_91Y",
+  5: "E1mQyUNFBxA",
+  6: "Z-fjZDuioqc",
+};
+
 async function uploadFileToR2(file, { email, onProgress, onSetup, signal } = {}) {
   const createRes = await fetch("/api/upload/create-multipart", {
     method: "POST",
@@ -108,6 +117,8 @@ export default function Home() {
   const [videoInputKey, setVideoInputKey] = useState(0);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [templateType, setTemplateType] = useState("static");
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -278,6 +289,8 @@ export default function Home() {
     setVideoProgress({});
     setImageInputKey((prev) => prev + 1);
     setVideoInputKey((prev) => prev + 1);
+    setTemplateType("static");
+    setSelectedTemplate(null);
   };
 
   const validateBeforeSubmit = () => {
@@ -462,6 +475,8 @@ export default function Home() {
           },
           videoUrls: videoUploads.map((video) => video.fileUrl),
           imageUrls: imageUploads.map((image) => image.fileUrl),
+          templateType,
+          selectedTemplate,
         }),
       });
 
@@ -826,6 +841,62 @@ export default function Home() {
                 </button>
               )}
             </label>
+
+            <label className="flex flex-col text-base font-semibold text-slate-600">
+              Template
+              <select
+                value={templateType}
+                onChange={(e) => setTemplateType(e.target.value)}
+                className="mt-3 rounded border border-slate-300 px-4 py-4 text-base font-normal text-slate-700 focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
+              >
+                <option value="static">Static</option>
+                <option value="animated">Animated</option>
+              </select>
+            </label>
+
+            {(templateType === "static" || templateType === "animated") && (
+              <div className="mt-6">
+                <h2 className="mb-4 text-xl font-semibold text-slate-700">Select a Template</h2>
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <div key={num} className="flex flex-col items-center gap-3">
+                      {templateType === "static" ? (
+                        <div className="relative w-full overflow-hidden rounded-lg border-2 border-slate-200 transition-all hover:border-[#007dc5]">
+                          <Image
+                            src={`/template${num}.webp`}
+                            alt={`Template ${num}`}
+                            width={800}
+                            height={400}
+                            className="h-auto w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="relative w-full overflow-hidden rounded-lg border-2 border-slate-200 transition-all hover:border-[#007dc5]">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${animatedTemplateVideos[num]}`}
+                            title={`Animated Template ${num}`}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            className="aspect-video w-full"
+                          />
+                        </div>
+                      )}
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="radio"
+                          name="template-selection"
+                          value={num}
+                          checked={selectedTemplate === num}
+                          onChange={(e) => setSelectedTemplate(Number(e.target.value))}
+                          className="h-4 w-4 cursor-pointer text-[#007dc5] focus:ring-2 focus:ring-[#007dc5]"
+                        />
+                        <span className="text-sm font-medium text-slate-600">Select Template {num}</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <label className="flex flex-col text-base font-semibold text-slate-600">
               <span className="inline-flex items-center gap-1">

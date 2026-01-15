@@ -1,35 +1,20 @@
-.node_modules
+# Env files
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.next/dev/build/chunks/
+.env.*
+!.env.example
 
-.next/dev/build/
+# Node
+node_modules/
 
-.next/dev/
+# Next.js
+.next/
+out/
 
-node_modules/\@aws-crypto/sha256-browser/build/module/
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-node_modules/\@aws-crypto/sha256-browser/node_modules/\@smithy/util-buffer-from/
-
-node_modules/\@aws-crypto/sha256-browser/node_modules/\@smithy/util-utf8/dist-es/
-
-node_modules/\@aws-crypto/sha256-browser/build/main/
-
-node_modules/.bin/
-
-node_modules/\@alloc/quick-lru/
-
-node_modules/\@aws-crypto/crc32/build/main/
-
-node_modules/\@aws-crypto/crc32/build/module/
-
-node_modules/\@aws-crypto/crc32/
-
-node_modules/\@aws-crypto/crc32c/build/main/
-
-node_modules/\@aws-crypto/crc32c/build/module/
-
-node_modules/\@aws-crypto/crc32c/
+# OS junk
+.DS_Store
+Thumbs.db
