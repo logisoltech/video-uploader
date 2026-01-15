@@ -12,9 +12,9 @@
     "@aws-sdk/s3-request-presigner": "^3.928.0",
     "env": "^0.0.2",
     "nanoid": "^5.1.6",
-    "next": "16.0.1",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "next": "^16.1.2",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-icons": "^5.5.0",
     "resend": "^6.4.2"
   },
