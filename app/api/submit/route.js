@@ -18,24 +18,24 @@ function isValidEmail(value) {
 function buildRecipientEmails() {
   const emails = [];
   
-  // Option 1: Check for OWNER_EMAIL_1 and OWNER_EMAIL_2
-  const email1 = typeof process.env.OWNER_EMAIL_1 === "string" ? process.env.OWNER_EMAIL_1.trim() : "";
-  const email2 = typeof process.env.OWNER_EMAIL_2 === "string" ? process.env.OWNER_EMAIL_2.trim() : "";
-  
-  if (email1 && isValidEmail(email1)) {
-    emails.push(email1);
-  }
-  if (email2 && isValidEmail(email2)) {
-    emails.push(email2);
+  // Primary option: Check OWNER_EMAIL (supports comma-separated or single email)
+  const ownerEmail = typeof process.env.OWNER_EMAIL === "string" ? process.env.OWNER_EMAIL.trim() : "";
+  if (ownerEmail) {
+    // Split by comma and filter valid emails
+    const emailList = ownerEmail.split(",").map((e) => e.trim()).filter((e) => e && isValidEmail(e));
+    emails.push(...emailList);
   }
   
-  // Option 2: Fallback to OWNER_EMAIL (supports comma-separated or single email)
+  // Fallback option: Check for OWNER_EMAIL_1 and OWNER_EMAIL_2 if OWNER_EMAIL not set
   if (emails.length === 0) {
-    const ownerEmail = typeof process.env.OWNER_EMAIL === "string" ? process.env.OWNER_EMAIL.trim() : "";
-    if (ownerEmail) {
-      // Split by comma and filter valid emails
-      const emailList = ownerEmail.split(",").map((e) => e.trim()).filter((e) => e && isValidEmail(e));
-      emails.push(...emailList);
+    const email1 = typeof process.env.OWNER_EMAIL_1 === "string" ? process.env.OWNER_EMAIL_1.trim() : "";
+    const email2 = typeof process.env.OWNER_EMAIL_2 === "string" ? process.env.OWNER_EMAIL_2.trim() : "";
+    
+    if (email1 && isValidEmail(email1)) {
+      emails.push(email1);
+    }
+    if (email2 && isValidEmail(email2)) {
+      emails.push(email2);
     }
   }
   
