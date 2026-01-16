@@ -243,18 +243,47 @@ export async function POST(req) {
   const formRows = Object.entries(form)
     .filter(([key]) => !["uploadedImageKeys", "uploadedVideoKeys"].includes(key))
     .map(
-      ([key, value]) => `
-        <tr>
-          <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; background:#f8fafc; font-weight: 600; width: 35%;">
-            ${formatLabel(key)}
-          </td>
-          <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
-            <pre style="margin: 0; font: 14px/1.5 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; white-space: pre-wrap;">${formatValue(
-              value
-            )}</pre>
-          </td>
-        </tr>
-      `
+      ([key, value]) => {
+        // Handle videoLinks specially if it's an array
+        if (key === "videoLinks" && Array.isArray(value)) {
+          const videoLinksList = value.length > 0
+            ? value
+                .map(
+                  (link, index) => `
+                    <div style="margin-bottom: 8px;">
+                      <div style="font-weight: 600; color:#1e293b; margin-bottom: 4px;">Video Link ${index + 1}</div>
+                      <a href="${link}" style="display:inline-block; color: #0c68ff; text-decoration: none; word-break: break-all;">${link}</a>
+                    </div>
+                  `
+                )
+                .join("")
+            : `<div style="color: #94a3b8;">No video links provided</div>`;
+          
+          return `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; background:#f8fafc; font-weight: 600; width: 35%;">
+                ${formatLabel(key)}
+              </td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
+                ${videoLinksList}
+              </td>
+            </tr>
+          `;
+        }
+        
+        return `
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; background:#f8fafc; font-weight: 600; width: 35%;">
+              ${formatLabel(key)}
+            </td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
+              <pre style="margin: 0; font: 14px/1.5 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; white-space: pre-wrap;">${formatValue(
+                value
+              )}</pre>
+            </td>
+          </tr>
+        `;
+      }
     )
     .join("");
 

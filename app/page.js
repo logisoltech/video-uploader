@@ -24,6 +24,8 @@ const initialForm = {
   videoLinks: "",
 };
 
+const initialVideoLinks = [""];
+
 const animatedTemplateVideos = {
   1: "na_-1PU-1LU",
   2: "D3urcZybv-E",
@@ -109,6 +111,7 @@ async function uploadFileToR2(file, { email, onProgress, onSetup, signal } = {})
 
 export default function Home() {
   const [form, setForm] = useState(initialForm);
+  const [videoLinks, setVideoLinks] = useState(initialVideoLinks);
   const [imageFiles, setImageFiles] = useState([]);
   const [videoFiles, setVideoFiles] = useState([]);
   const [imageProgress, setImageProgress] = useState({});
@@ -158,6 +161,23 @@ export default function Home() {
       ...prev,
       [field]: event.target.value,
     }));
+  };
+
+  const handleVideoLinkChange = (index) => (event) => {
+    const newVideoLinks = [...videoLinks];
+    newVideoLinks[index] = event.target.value;
+    setVideoLinks(newVideoLinks);
+  };
+
+  const handleAddVideoLink = () => {
+    setVideoLinks([...videoLinks, ""]);
+  };
+
+  const handleRemoveVideoLink = (index) => {
+    if (videoLinks.length > 1) {
+      const newVideoLinks = videoLinks.filter((_, i) => i !== index);
+      setVideoLinks(newVideoLinks);
+    }
   };
 
   const handleImageChange = (event) => {
@@ -283,6 +303,7 @@ export default function Home() {
     videoUploadSessionsRef.current.clear();
 
     setForm(initialForm);
+    setVideoLinks(initialVideoLinks);
     setImageFiles([]);
     setVideoFiles([]);
     setImageProgress({});
@@ -449,6 +470,8 @@ export default function Home() {
         }
       }
 
+      const filteredVideoLinks = videoLinks.filter((link) => link.trim() !== "");
+      
       const response = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -469,7 +492,7 @@ export default function Home() {
             schoolTeamPositions: form.schoolTeamPositions,
             honors: form.honors,
             videoCutInstructions: form.videoCutInstructions,
-            videoLinks: form.videoLinks,
+            videoLinks: filteredVideoLinks,
             uploadedImageKeys: imageUploads.map((image) => image.key),
             uploadedVideoKeys: videoUploads.map((video) => video.key),
           },
@@ -913,16 +936,40 @@ export default function Home() {
               />
             </label>
 
-            <label className="flex flex-col text-base font-semibold text-slate-600">
-              Attach links of your videos
-              <input
-                type="url"
-                placeholder="Example: https://drive.google.com/file/d/..., https://www.dropbox.com/scl/fi/..."
-                value={form.videoLinks}
-                onChange={handleChange("videoLinks")}
-                className="mt-3 rounded border border-slate-300 px-4 py-4 text-base font-normal text-slate-700 placeholder:text-slate-400 focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
-              />
-            </label>
+            <div className="flex flex-col gap-4">
+              <label className="flex flex-col text-base font-semibold text-slate-600">
+                Attach links of your videos
+              </label>
+              {videoLinks.map((link, index) => (
+                <div key={index} className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="Example: https://drive.google.com/file/d/..., https://www.dropbox.com/scl/fi/..."
+                      value={link}
+                      onChange={handleVideoLinkChange(index)}
+                      className="flex-1 rounded border border-slate-300 px-4 py-4 text-base font-normal text-slate-700 placeholder:text-slate-400 focus:border-[#007dc5] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
+                    />
+                    {videoLinks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveVideoLink(index)}
+                        className="inline-flex items-center justify-center rounded border border-slate-300 px-4 py-4 text-base font-medium text-slate-600 transition hover:border-[#d93025] hover:text-[#d93025] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddVideoLink}
+                className="inline-flex w-max items-center justify-center rounded border border-dashed border-[#007dc5] px-4 py-2 text-sm font-medium text-[#007dc5] transition hover:bg-[#f0f4ff] focus:outline-none focus:ring-2 focus:ring-[#007dc5]/20"
+              >
+                Add more links +
+              </button>
+            </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               {status.type !== "idle" && (
