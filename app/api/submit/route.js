@@ -15,6 +15,33 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+function buildRecipientEmails() {
+  const emails = [];
+  
+  // Option 1: Check for OWNER_EMAIL_1 and OWNER_EMAIL_2
+  const email1 = typeof process.env.OWNER_EMAIL_1 === "string" ? process.env.OWNER_EMAIL_1.trim() : "";
+  const email2 = typeof process.env.OWNER_EMAIL_2 === "string" ? process.env.OWNER_EMAIL_2.trim() : "";
+  
+  if (email1 && isValidEmail(email1)) {
+    emails.push(email1);
+  }
+  if (email2 && isValidEmail(email2)) {
+    emails.push(email2);
+  }
+  
+  // Option 2: Fallback to OWNER_EMAIL (supports comma-separated or single email)
+  if (emails.length === 0) {
+    const ownerEmail = typeof process.env.OWNER_EMAIL === "string" ? process.env.OWNER_EMAIL.trim() : "";
+    if (ownerEmail) {
+      // Split by comma and filter valid emails
+      const emailList = ownerEmail.split(",").map((e) => e.trim()).filter((e) => e && isValidEmail(e));
+      emails.push(...emailList);
+    }
+  }
+  
+  return emails;
+}
+
 const ticketClient =
   process.env.S3_BUCKET && process.env.S3_REGION && process.env.S3_ENDPOINT
     ? new S3Client({
@@ -134,7 +161,7 @@ export async function POST(req) {
   }
 
   const staticFrom = buildFromAddress();
-  const ownerEmail = typeof process.env.OWNER_EMAIL === "string" ? process.env.OWNER_EMAIL.trim() : "";
+  const recipientEmails = buildRecipientEmails();
 
   if (!staticFrom) {
     return NextResponse.json(
@@ -143,9 +170,9 @@ export async function POST(req) {
     );
   }
 
-  if (!isValidEmail(ownerEmail)) {
+  if (recipientEmails.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "OWNER_EMAIL must be configured with a valid email address." },
+      { ok: false, error: "At least one recipient email must be configured. Use OWNER_EMAIL_1 and OWNER_EMAIL_2, or OWNER_EMAIL." },
       { status: 400 }
     );
   }
@@ -405,7 +432,7 @@ export async function POST(req) {
   try {
     const response = await resend.emails.send({
       from: staticFrom,
-      to: ownerEmail,
+      to: recipientEmails.length === 1 ? recipientEmails[0] : recipientEmails,
       subject,
       html,
       ...(replyTo ? { reply_to: replyTo } : {}),
